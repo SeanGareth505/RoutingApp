@@ -1,0 +1,133 @@
+.app-shell {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  min-height: 100dvh;
+}
+
+.desktop-nav {
+  background: linear-gradient(180deg, rgba(14, 25, 45, 0.96), rgba(17, 29, 53, 0.94));
+  color: #fff;
+  padding: 1.25rem 1rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.brand {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.brand h1,
+.brand p {
+  margin: 0;
+}
+
+.brand h1 {
+  font-size: 1rem;
+}
+
+.brand p {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: 0.75rem;
+  color: rgba(255, 255, 255, 0.84);
+  text-decoration: none;
+}
+
+.nav-link.active {
+  background: rgba(98, 119, 255, 0.3);
+  color: #fff;
+}
+
+.content-area {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface-elevated) 92%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.topbar h2,
+.topbar p {
+  margin: 0;
+}
+
+.topbar p {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.connection-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.45rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #f8fafc;
+  background: #3455db;
+}
+
+.connection-badge.connection-direct {
+  background: #0f766e;
+}
+
+.theme-toggle {
+  margin-left: auto;
+}
+
+.mobile-menu {
+  display: none;
+}
+
+.page-container {
+  padding: 1.25rem 1.4rem;
+  color: var(--text-primary);
+}
+
+.mobile-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.drawer-link {
+  justify-content: flex-start;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .desktop-nav {
+    display: none;
+  }
+
+  .mobile-menu {
+    display: inline-flex;
+  }
+}

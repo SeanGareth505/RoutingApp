@@ -1,0 +1,64 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+tmp/
+out-tsc/
+bazel-out/
+.angular/cache/
+
+# Testing and coverage
+coverage/
+*.lcov
+__screenshots__/
+
+# Runtime files and logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+testem.log
+libpeerconnection.log
+connect.lock
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Environment and local config
+.env
+.env.*
+!.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE/editor files
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.history/
+
+# VS Code (keep shared workspace config)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/mcp.json
+
+# Misc generated
+typings/
+.sass-cache/
+
+# OS files
+.DS_Store
+Thumbs.db

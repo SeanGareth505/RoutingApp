@@ -1,0 +1,66 @@
+@use 'primeflex/primeflex.scss';
+@import 'primeicons/primeicons.css';
+@import 'leaflet/dist/leaflet.css';
+@import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
+
+:root {
+  --surface-0: #f5f7fb;
+  --surface-900: #10182b;
+  --brand-500: #3455db;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --shadow-soft: 0 18px 35px rgba(16, 24, 43, 0.08);
+  --text-primary: #101828;
+  --text-muted: #667085;
+  --border-color: rgba(15, 23, 42, 0.08);
+  --surface-elevated: rgba(255, 255, 255, 0.7);
+  --app-background: radial-gradient(circle at top, #f7f9ff 0%, #eef2ff 35%, #edf1f7 100%);
+  --focus-ring: 0 0 0 3px rgba(52, 85, 219, 0.25);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: Inter, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text-primary);
+  background: var(--app-background);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.page-subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+a {
+  color: inherit;
+}
+
+.app-dark {
+  --text-primary: #f2f4f7;
+  --text-muted: #98a2b3;
+  --border-color: rgba(255, 255, 255, 0.16);
+  --surface-elevated: rgba(17, 24, 39, 0.7);
+  --app-background: radial-gradient(circle at top, #0f172a 0%, #0b1222 40%, #060b16 100%);
+}
