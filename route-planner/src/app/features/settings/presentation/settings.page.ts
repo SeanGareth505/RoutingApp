@@ -98,6 +98,24 @@ import { UserRole } from '../../../core/domain/route.models';
         color: var(--text-muted);
         margin-top: -0.25rem;
       }
+      @media (max-width: 960px) {
+        .settings-form {
+          max-width: 100%;
+        }
+        .help-text {
+          margin-top: -0.1rem;
+          font-size: 0.8rem;
+          line-height: 1.35;
+        }
+        :host ::ng-deep .settings-form .p-selectbutton {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.35rem;
+        }
+        :host ::ng-deep .settings-form .p-selectbutton .p-button {
+          justify-content: center;
+        }
+      }
     `
   ],
   changeDetection: ChangeDetectionStrategy.OnPush

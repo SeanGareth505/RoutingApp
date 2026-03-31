@@ -60,27 +60,51 @@ import { InputNumberModule } from 'primeng/inputnumber';
             <td>{{ route.totalDistanceKm }} km</td>
             <td>{{ route.updatedAtIso | date: 'medium' }}</td>
             <td class="actions">
-              <button pButton type="button" class="p-button-text" (click)="openBuilder(route.id)">
+              <button pButton type="button" class="p-button-text action-primary" (click)="openBuilder(route.id)">
                 Open
               </button>
-              <button pButton type="button" class="p-button-text" (click)="openVersions(route.id)">
-                Versions
-              </button>
-              <button pButton type="button" class="p-button-text" (click)="openSubmissions(route.id)">
-                Submissions
-              </button>
-              <button pButton type="button" class="p-button-text" (click)="exportCsv(route.id)">
+              <button pButton type="button" class="p-button-text action-primary" (click)="exportCsv(route.id)">
                 Export CSV
               </button>
-              <button pButton type="button" class="p-button-text" (click)="exportGtfs(route.id)">
-                Export GTFS
-              </button>
-              <button pButton type="button" class="p-button-text" (click)="createLink(route.id)">
-                Create link
-              </button>
-              <button pButton type="button" class="p-button-text p-button-danger" (click)="remove(route.id)">
+              <button
+                pButton
+                type="button"
+                class="p-button-text p-button-danger action-primary"
+                (click)="remove(route.id)"
+              >
                 Delete
               </button>
+              <div class="desktop-extra-actions">
+                <button pButton type="button" class="p-button-text" (click)="openVersions(route.id)">
+                  Versions
+                </button>
+                <button pButton type="button" class="p-button-text" (click)="openSubmissions(route.id)">
+                  Submissions
+                </button>
+                <button pButton type="button" class="p-button-text" (click)="exportGtfs(route.id)">
+                  Export GTFS
+                </button>
+                <button pButton type="button" class="p-button-text" (click)="createLink(route.id)">
+                  Create link
+                </button>
+              </div>
+              <details class="mobile-extra-actions">
+                <summary>More actions</summary>
+                <div class="mobile-extra-actions-list">
+                  <button pButton type="button" class="p-button-text" (click)="openVersions(route.id)">
+                    Versions
+                  </button>
+                  <button pButton type="button" class="p-button-text" (click)="openSubmissions(route.id)">
+                    Submissions
+                  </button>
+                  <button pButton type="button" class="p-button-text" (click)="exportGtfs(route.id)">
+                    Export GTFS
+                  </button>
+                  <button pButton type="button" class="p-button-text" (click)="createLink(route.id)">
+                    Create link
+                  </button>
+                </div>
+              </details>
             </td>
           </tr>
         </ng-template>
@@ -90,7 +114,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
     <p-dialog
       header="CSV Import Workflow"
       [modal]="true"
-      [style]="{ width: '38rem' }"
+      [style]="{ width: 'min(38rem, 92vw)' }"
       [visible]="csvDialog()"
       (visibleChange)="csvDialog.set($event)"
     >
@@ -144,7 +168,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
     <p-dialog
       header="GTFS Export Options"
       [modal]="true"
-      [style]="{ width: '42rem' }"
+      [style]="{ width: 'min(42rem, 94vw)' }"
       [visible]="gtfsDialog()"
       (visibleChange)="gtfsDialog.set($event)"
     >
@@ -222,7 +246,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
     <p-dialog
       header="Version History"
       [modal]="true"
-      [style]="{ width: '34rem' }"
+      [style]="{ width: 'min(34rem, 92vw)' }"
       [visible]="versionsDialog()"
       (visibleChange)="versionsDialog.set($event)"
     >
@@ -242,7 +266,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
     <p-dialog
       header="Pending Submissions"
       [modal]="true"
-      [style]="{ width: '38rem' }"
+      [style]="{ width: 'min(38rem, 92vw)' }"
       [visible]="submissionsDialog()"
       (visibleChange)="submissionsDialog.set($event)"
     >
@@ -288,6 +312,15 @@ import { InputNumberModule } from 'primeng/inputnumber';
       .actions {
         display: flex;
         flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .desktop-extra-actions {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .mobile-extra-actions {
+        display: none;
       }
       .links-card {
         margin-top: 1rem;
@@ -297,6 +330,10 @@ import { InputNumberModule } from 'primeng/inputnumber';
         align-items: center;
         gap: 0.5rem;
         padding: 0.4rem 0;
+        flex-wrap: wrap;
+      }
+      .link-row code {
+        overflow-wrap: anywhere;
       }
       .version-row {
         display: flex;
@@ -356,6 +393,57 @@ import { InputNumberModule } from 'primeng/inputnumber';
         align-items: center;
         gap: 0.4rem;
         color: var(--text-primary);
+      }
+      @media (max-width: 960px) {
+        .header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .action-primary {
+          justify-content: flex-start;
+          width: 100%;
+        }
+        .desktop-extra-actions {
+          display: none;
+        }
+        .mobile-extra-actions {
+          display: block;
+          width: 100%;
+          border: 1px solid var(--border-color);
+          border-radius: 0.5rem;
+          background: var(--surface-elevated);
+        }
+        .mobile-extra-actions summary {
+          cursor: pointer;
+          list-style: none;
+          font-weight: 600;
+          font-size: 0.84rem;
+          color: var(--text-primary);
+          padding: 0.45rem 0.6rem;
+        }
+        .mobile-extra-actions-list {
+          display: grid;
+          gap: 0.2rem;
+          padding: 0 0.35rem 0.35rem;
+        }
+        .mobile-extra-actions-list button {
+          justify-content: flex-start;
+        }
+        .gtfs-grid {
+          grid-template-columns: 1fr;
+          gap: 0.45rem;
+        }
+        .version-row {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .report-block {
+          max-height: min(220px, 32dvh);
+        }
       }
     `
   ],

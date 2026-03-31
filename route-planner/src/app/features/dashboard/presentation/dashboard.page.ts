@@ -63,6 +63,20 @@ import { RoutePlannerFacade } from '../../../core/application/route-planner.faca
         text-decoration: none;
         font-weight: 600;
       }
+      @media (max-width: 960px) {
+        .dashboard-layout {
+          gap: 0.8rem;
+        }
+        .dashboard-grid {
+          grid-template-columns: 1fr;
+          gap: 0.8rem;
+        }
+        a {
+          display: inline-flex;
+          align-items: center;
+          min-height: 2.4rem;
+        }
+      }
     `
   ],
   changeDetection: ChangeDetectionStrategy.OnPush

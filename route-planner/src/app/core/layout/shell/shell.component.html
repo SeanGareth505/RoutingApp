@@ -73,6 +73,8 @@
         type="button"
         class="p-button-text mobile-menu"
         (click)="mobileMenuVisible.set(true)"
+        aria-label="Open navigation menu"
+        title="Open navigation menu"
       >
         <i class="pi pi-bars"></i>
       </button>
@@ -84,6 +86,7 @@
 <p-drawer
   [visible]="mobileMenuVisible()"
   position="left"
+  styleClass="app-mobile-drawer"
   (visibleChange)="mobileMenuVisible.set($event)"
 >
   <div class="mobile-drawer">
@@ -93,5 +96,9 @@
         {{ item.label }}
       </button>
     }
+    <button pButton type="button" class="p-button-text drawer-link" (click)="toggleTheme()">
+      <i [class]="themeStore.mode() === 'dark' ? 'pi pi-sun' : 'pi pi-moon'"></i>
+      {{ themeStore.mode() === 'dark' ? 'Switch to Light' : 'Switch to Dark' }}
+    </button>
   </div>
 </p-drawer>

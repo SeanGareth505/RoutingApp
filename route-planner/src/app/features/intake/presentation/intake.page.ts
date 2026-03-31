@@ -131,9 +131,39 @@ import { RoutePlannerFacade } from '../../../core/application/route-planner.faca
         margin-top: 0.75rem;
         display: flex;
         justify-content: space-between;
+        gap: 0.5rem;
       }
       .review-grid p {
         margin: 0.3rem 0;
+      }
+      @media (max-width: 960px) {
+        .intake-layout {
+          margin: 1rem auto;
+          padding: 0 0.55rem;
+        }
+        .stop-line {
+          grid-template-columns: 1fr;
+        }
+        .stop-line button {
+          justify-self: flex-start;
+          min-width: 2.4rem;
+          min-height: 2.4rem;
+        }
+        .wizard-actions {
+          flex-direction: column-reverse;
+        }
+        .wizard-actions button {
+          width: 100%;
+          justify-content: center;
+        }
+        :host ::ng-deep .p-steps .p-steps-list {
+          overflow-x: auto;
+          padding-bottom: 0.3rem;
+        }
+        :host ::ng-deep .p-steps .p-steps-item-label {
+          white-space: nowrap;
+          font-size: 0.72rem;
+        }
       }
     `
   ],

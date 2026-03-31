@@ -245,18 +245,49 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
                   } @else {
                     <div class="checkpoint-list">
                       @for (item of filteredCheckpoints(); track item.stop.id) {
-                        <button
-                          type="button"
-                          class="checkpoint-item"
-                          (click)="focusCheckpoint(item.index)"
-                          (contextmenu)="openCheckpointContext($event, item.index)"
-                        >
-                          <div>
-                            <strong>{{ item.index + 1 }}. {{ item.stop.label }}</strong>
-                            <small>{{ item.stop.address }}</small>
+                        <article class="checkpoint-item">
+                          <button
+                            type="button"
+                            class="checkpoint-main"
+                            (click)="focusCheckpoint(item.index)"
+                            (contextmenu)="openCheckpointContext($event, item.index)"
+                          >
+                            <div>
+                              <strong>{{ item.index + 1 }}. {{ item.stop.label }}</strong>
+                              <small>{{ item.stop.address }}</small>
+                            </div>
+                            <span>{{ item.distanceKm.toFixed(2) }} km</span>
+                          </button>
+                          <div class="checkpoint-actions">
+                            <button
+                              pButton
+                              type="button"
+                              class="p-button-sm p-button-text"
+                              title="Duplicate checkpoint"
+                              (click)="duplicateCheckpoint(item.index)"
+                            >
+                              <i class="pi pi-copy"></i>
+                            </button>
+                            <button
+                              pButton
+                              type="button"
+                              class="p-button-sm p-button-text"
+                              [title]="item.stop.locked ? 'Unlock checkpoint' : 'Lock checkpoint'"
+                              (click)="toggleCheckpointLock(item.index)"
+                            >
+                              <i [class]="item.stop.locked ? 'pi pi-lock' : 'pi pi-lock-open'"></i>
+                            </button>
+                            <button
+                              pButton
+                              type="button"
+                              class="p-button-sm p-button-text"
+                              title="Delete checkpoint"
+                              (click)="removeStop(item.index)"
+                            >
+                              <i class="pi pi-trash"></i>
+                            </button>
                           </div>
-                          <span>{{ item.distanceKm.toFixed(2) }} km</span>
-                        </button>
+                        </article>
                       }
                     </div>
                   }
@@ -517,7 +548,6 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
       .left-rail {
         display: flex;
         flex-direction: column;
-        align-self: stretch;
         min-height: 0;
       }
       .left-data-card,
@@ -680,34 +710,42 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
         border-radius: 0.75rem;
       }
       .checkpoint-item {
-        padding: 0.46rem 0.54rem;
+        padding: 0.42rem 0.5rem;
         border-radius: 0.7rem;
         color: var(--text-primary);
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: #ffffff;
+      }
+      .checkpoint-main {
+        border: none;
+        background: transparent;
+        color: inherit;
+        width: 100%;
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 0.5rem;
         text-align: left;
-        border: 1px solid rgba(148, 163, 184, 0.28);
-        background: #ffffff;
-        transition:
-          border-color 0.16s ease,
-          box-shadow 0.16s ease,
-          transform 0.16s ease;
+        padding: 0;
       }
       .checkpoint-item strong {
         font-size: 0.85rem;
         line-height: 1.2;
       }
-      .checkpoint-item:hover {
-        border-color: rgba(37, 99, 235, 0.36);
-        box-shadow: 0 6px 16px rgba(30, 64, 175, 0.12);
-        transform: translateY(-1px);
-      }
       .checkpoint-item small {
         color: var(--text-muted);
         font-size: 0.72rem;
         line-height: 1.25;
+      }
+      .checkpoint-actions {
+        margin-top: 0.32rem;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.2rem;
+      }
+      :host ::ng-deep .checkpoint-actions .p-button.p-button-sm {
+        width: 2rem;
+        height: 2rem;
       }
       .stop-form {
         display: grid;
@@ -743,13 +781,6 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
         gap: 0.38rem;
         border: 1px solid rgba(148, 163, 184, 0.28);
         background: #ffffff;
-        transition:
-          border-color 0.16s ease,
-          box-shadow 0.16s ease;
-      }
-      .stop-row:hover {
-        border-color: rgba(37, 99, 235, 0.32);
-        box-shadow: 0 6px 16px rgba(30, 64, 175, 0.1);
       }
       .stop-main {
         display: flex;
@@ -910,7 +941,6 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
         justify-items: center;
         text-align: center;
         border: 1px dashed rgba(148, 163, 184, 0.55);
-        background: linear-gradient(180deg, rgba(248, 250, 252, 0.72), rgba(255, 255, 255, 0.92));
         border-radius: 0.8rem;
         padding: 1.15rem 0.85rem;
         color: var(--text-muted);
@@ -985,6 +1015,18 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
         .map-route-meta {
           align-items: flex-start;
           flex-direction: column;
+        }
+        :host ::ng-deep .map-route-actions .p-button.p-button-sm {
+          width: 2.35rem;
+          height: 2.35rem;
+        }
+        .path-actions {
+          overflow-x: auto;
+          flex-wrap: nowrap;
+          padding-bottom: 0.2rem;
+        }
+        .path-actions .action-chip {
+          flex: 0 0 auto;
         }
       }
     `,

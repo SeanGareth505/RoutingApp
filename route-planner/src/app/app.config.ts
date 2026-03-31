@@ -1,4 +1,4 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { ApplicationConfig, provideBrowserGlobalErrorListeners, isDevMode } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideRouter, withHashLocation } from '@angular/router';
@@ -12,10 +12,11 @@ import {
   EXTERNAL_SUBMISSION_PORT,
   GEOCODING_PORT,
   ROUTE_OPTIMIZATION_PORT,
-  ROUTE_REPOSITORY
+  ROUTE_REPOSITORY,
 } from './core/tokens/ports.tokens';
 
 import { routes } from './app.routes';
+import { provideServiceWorker } from '@angular/service-worker';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -28,9 +29,9 @@ export const appConfig: ApplicationConfig = {
         options: {
           prefix: 'p',
           darkModeSelector: '.app-dark',
-          cssLayer: false
-        }
-      }
+          cssLayer: false,
+        },
+      },
     }),
     MessageService,
     LocalDataStoreService,
@@ -38,20 +39,24 @@ export const appConfig: ApplicationConfig = {
     RouteOptimizationAdapter,
     {
       provide: ROUTE_REPOSITORY,
-      useExisting: LocalDataStoreService
+      useExisting: LocalDataStoreService,
     },
     {
       provide: EXTERNAL_SUBMISSION_PORT,
-      useExisting: LocalDataStoreService
+      useExisting: LocalDataStoreService,
     },
     {
       provide: GEOCODING_PORT,
-      useExisting: NominatimGeocodingAdapter
+      useExisting: NominatimGeocodingAdapter,
     },
     {
       provide: ROUTE_OPTIMIZATION_PORT,
-      useExisting: RouteOptimizationAdapter
+      useExisting: RouteOptimizationAdapter,
     },
-    provideRouter(routes, withHashLocation())
-  ]
+    provideRouter(routes, withHashLocation()),
+    provideServiceWorker('ngsw-worker.js', {
+      enabled: !isDevMode(),
+      registrationStrategy: 'registerWhenStable:30000',
+    }),
+  ],
 };

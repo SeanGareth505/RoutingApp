@@ -171,19 +171,21 @@ nav {
 .page-container {
   padding: 1.25rem 1.4rem;
   color: var(--text-primary);
+  padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
 }
 
 .mobile-drawer {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
 }
 
 .drawer-link {
   justify-content: flex-start;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
   .app-shell {
     grid-template-columns: 1fr;
   }
@@ -195,5 +197,22 @@ nav {
   .mobile-menu {
     display: inline-flex;
     margin-bottom: 0.5rem;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+  }
+
+  .page-container {
+    padding: 0.9rem 0.85rem;
+    padding-bottom: calc(0.9rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+:host ::ng-deep .app-mobile-drawer {
+  width: min(88vw, 22rem);
+}
+
+@media (max-width: 960px) {
+  :host ::ng-deep .app-mobile-drawer .p-drawer-content {
+    padding: 0.9rem 0.75rem;
   }
 }
