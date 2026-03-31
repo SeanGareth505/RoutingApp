@@ -186,11 +186,7 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
 
         <p-card class="map-card">
           <div class="map-header">
-            <div class="map-header-top">
-              <div class="map-title-block">
-                <h3>Live Route Map</h3>
-              </div>
-            </div>
+            <h3>Live Route Map</h3>
             @if (isPathEditMode()) {
               <div class="path-editor">
                 <div class="edit-context">
@@ -201,22 +197,7 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
                     Path: {{ activeRoute()?.manualRouteLocked ? 'Locked' : 'Unlocked' }}
                   </span>
                 </div>
-                <div class="leg-selector">
-                  @for (leg of legOptions(); track leg.key) {
-                    <button
-                      pButton
-                      type="button"
-                      class="p-button-sm leg-chip"
-                      [class.leg-chip-active]="selectedLegKey() === leg.key"
-                      [class.p-button-outlined]="selectedLegKey() !== leg.key"
-                      [class.p-button-secondary]="selectedLegKey() !== leg.key"
-                      [attr.aria-pressed]="selectedLegKey() === leg.key"
-                      (click)="selectLeg(leg.key)"
-                    >
-                      {{ leg.label }}
-                    </button>
-                  }
-                </div>
+                <small class="path-helper">Drag or click the route line. The nearest leg is selected automatically.</small>
                 <div class="path-actions">
                   <button
                     pButton
@@ -487,15 +468,6 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
         color: var(--text-muted);
         margin: 0.5rem 0 1rem;
       }
-      .map-header-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 0.8rem;
-      }
-      .map-title-block h3 {
-        margin: 0;
-      }
       .route-variants {
         display: flex;
         flex-wrap: wrap;
@@ -528,23 +500,16 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
         flex-wrap: wrap;
         gap: 0.35rem;
       }
+      .path-helper {
+        color: var(--text-muted);
+      }
       .edit-context {
         display: flex;
         flex-wrap: wrap;
         gap: 0.35rem;
       }
-      .context-chip {
-        font-size: 0.78rem;
-        color: var(--text-muted);
-        border: 1px solid var(--border-color);
-        border-radius: 999px;
-        padding: 0.22rem 0.5rem;
-      }
       :host ::ng-deep .map-card .p-button {
         border-radius: 999px;
-      }
-      :host ::ng-deep .map-card .leg-chip-active.p-button {
-        box-shadow: var(--focus-ring);
       }
       :host ::ng-deep .via-pin {
         width: 28px !important;
@@ -1078,18 +1043,13 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     this.applyMapInteractionMode();
   }
 
-  protected selectLeg(legKey: string): void {
-    this.selectedLegKey.set(legKey);
-  }
-
   protected startViaPointPlacement(): void {
     const map = this.mapInstance;
-    const legKey = this.resolveSelectedLegKey();
-    if (!map || !legKey) {
+    if (!map || this.legOptions().length === 0) {
       this.messageService.add({
         severity: 'warn',
-        summary: 'Select route leg',
-        detail: 'Choose a leg first, then add a via point.'
+        summary: 'Add more stops',
+        detail: 'At least two stops are required before editing route path.'
       });
       return;
     }
@@ -1110,7 +1070,8 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     if (!this.isPathEditMode()) {
       return;
     }
-    const legKey = this.resolveSelectedLegKey();
+    const legKey =
+      this.inferLegKeyFromLocation(event.latlng.lat, event.latlng.lng) ?? this.resolveSelectedLegKey();
     if (!legKey) {
       return;
     }
@@ -1150,15 +1111,17 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
   }
 
   private async addViaPointAtLocation(lat: number, lng: number, legKey?: string): Promise<void> {
-    const selectedLegKey = legKey ?? this.resolveSelectedLegKey();
+    const selectedLegKey =
+      legKey ?? this.inferLegKeyFromLocation(lat, lng) ?? this.resolveSelectedLegKey();
     if (!selectedLegKey) {
       this.messageService.add({
         severity: 'warn',
-        summary: 'Select route leg',
-        detail: 'Choose a leg first before editing route path.'
+        summary: 'Add more stops',
+        detail: 'At least two stops are required before editing route path.'
       });
       return;
     }
+    this.selectedLegKey.set(selectedLegKey);
     const route = this.activeRoute();
     if (!route) {
       return;
@@ -1249,16 +1212,22 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     });
 
     this.geomanCreateHandler = (rawEvent: unknown) => {
-      const selectedLegKey = this.selectedLegKey();
       const mapRef = this.mapInstance;
       const event = rawEvent as {
         layer?: Marker;
       };
-      if (!this.isPathEditMode() || !selectedLegKey || !event.layer || !mapRef) {
+      if (!this.isPathEditMode() || !event.layer || !mapRef) {
         return;
       }
 
       const location = event.layer.getLatLng();
+      const selectedLegKey =
+        this.inferLegKeyFromLocation(location.lat, location.lng) ?? this.resolveSelectedLegKey();
+      if (!selectedLegKey) {
+        mapRef.removeLayer(event.layer);
+        return;
+      }
+      this.selectedLegKey.set(selectedLegKey);
       const route = this.activeRoute();
       if (!route) {
         return;
@@ -1488,6 +1457,26 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     const first = options[0]?.key ?? null;
     this.selectedLegKey.set(first);
     return first;
+  }
+
+  private inferLegKeyFromLocation(lat: number, lng: number): string | null {
+    const stops = this.activeStops();
+    if (stops.length < 2) {
+      return null;
+    }
+    const point = { lat, lng };
+    let closestLegKey: string | null = null;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < stops.length - 1; index += 1) {
+      const fromStop = stops[index];
+      const toStop = stops[index + 1];
+      const distance = pointToSegmentDistanceMeters(point, fromStop, toStop);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestLegKey = this.buildLegKey(fromStop.id, toStop.id);
+      }
+    }
+    return closestLegKey;
   }
 
   private snapPointToRoutePath(lat: number, lng: number): { lat: number; lng: number } {
