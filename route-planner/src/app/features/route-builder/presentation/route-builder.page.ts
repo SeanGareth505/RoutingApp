@@ -1,9 +1,18 @@
 import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
+import { AccordionModule } from 'primeng/accordion';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
@@ -20,12 +29,13 @@ import {
   latLng,
   marker,
   polyline,
-  tileLayer
+  tileLayer,
 } from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
 import { MessageService } from 'primeng/api';
 import { RoutePlannerFacade } from '../../../core/application/route-planner.facade';
 import { SettingsStore } from '../../../core/application/settings.store';
+import { CsvRouteService } from '../../../core/infrastructure/csv-route.service';
 import { AddressSuggestion } from '../../../core/ports/geocoding.port';
 import { RouteStop, RouteViaPoint } from '../../../core/domain/route.models';
 import { haversineDistanceKm } from '../../../shared/utils/geo';
@@ -36,6 +46,7 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
+    AccordionModule,
     CardModule,
     ButtonModule,
     InputTextModule,
@@ -43,195 +54,367 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
     AutoCompleteModule,
     TagModule,
     DragDropModule,
-    LeafletModule
+    LeafletModule,
   ],
   template: `
     <section class="route-builder-layout">
-      <p-card class="toolbar-card">
-        <div class="toolbar-grid">
-          <form [formGroup]="routeForm" class="route-name-form">
-            <label for="routeName">Route name</label>
-            <input id="routeName" pInputText formControlName="name" />
-          </form>
-
-          <div class="toolbar-status">
-            <p-tag
-              [value]="activeRoute()?.manualOverride ? 'Manual mode' : 'Auto optimize mode'"
-              [severity]="activeRoute()?.manualOverride ? 'warn' : 'success'"
-            ></p-tag>
-            <p class="summary">
-              {{ activeStops().length }} stop(s) | {{ activeRoute()?.metrics?.totalDistanceKm ?? 0 }} km |
-              {{ activeRoute()?.metrics?.estimatedMinutes ?? 0 }} min
-            </p>
-          </div>
-
-          <div class="toolbar-actions">
-            <button pButton type="button" class="p-button-outlined" (click)="optimizeRoute()">
-              Auto optimize
-            </button>
-            <button pButton type="button" class="p-button-secondary" (click)="toggleManualMode()">
-              Toggle Manual
-            </button>
-            <button
-              pButton
-              type="button"
-              class="p-button-outlined"
-              [disabled]="!canUndo()"
-              aria-label="Undo last edit"
-              (click)="undoEdit()"
-            >
-              Undo
-            </button>
-            <button
-              pButton
-              type="button"
-              class="p-button-outlined"
-              [disabled]="!canRedo()"
-              aria-label="Redo last edit"
-              (click)="redoEdit()"
-            >
-              Redo
-            </button>
-            <button
-              pButton
-              type="button"
-              class="p-button-secondary"
-              [class.p-button-outlined]="!isPathEditMode()"
-              (click)="togglePathEditMode()"
-            >
-              {{ isPathEditMode() ? 'Exit Path Edit' : 'Edit Path' }}
-            </button>
-            <button pButton type="button" (click)="saveRoute()">Save Route</button>
-          </div>
-        </div>
-      </p-card>
-
-      <p-card class="checkpoint-card">
-        <div class="checkpoint-header">
-          <div>
-            <h3>Checkpoint Navigator</h3>
-            <small>Jump, focus, and manage checkpoints quickly.</small>
-          </div>
-          <button pButton type="button" class="p-button-text" (click)="checkpointPanelCollapsed.set(!checkpointPanelCollapsed())">
-            {{ checkpointPanelCollapsed() ? 'Expand' : 'Collapse' }}
-          </button>
-        </div>
-        @if (!checkpointPanelCollapsed()) {
-          <div class="checkpoint-tools">
-            <input
-              pInputText
-              [ngModel]="checkpointSearch()"
-              (ngModelChange)="checkpointSearch.set($event)"
-              placeholder="Search checkpoint label/address"
-              aria-label="Search checkpoints"
-            />
-            <button pButton type="button" class="p-button-text" (click)="checkpointSearch.set('')">Clear</button>
-          </div>
-          <div class="checkpoint-list">
-            @for (item of filteredCheckpoints(); track item.stop.id) {
+      <section class="builder-grid">
+        <section class="left-rail">
+          <p-card class="left-data-card">
+            <div class="left-panel-header">
+              <div class="left-panel-title-wrap">
+                <h3>Route sections</h3>
+                <small>Manage stops and checkpoints</small>
+              </div>
               <button
+                pButton
                 type="button"
-                class="checkpoint-item"
-                (click)="focusCheckpoint(item.index)"
-                (contextmenu)="openCheckpointContext($event, item.index)"
+                class="p-button-sm add-stop-btn"
+                (click)="openAddStopPanel()"
               >
-                <div>
-                  <strong>{{ item.index + 1 }}. {{ item.stop.label }}</strong>
-                  <small>{{ item.stop.address }}</small>
-                </div>
-                <span>{{ item.distanceKm.toFixed(2) }} km</span>
+                <i class="pi pi-plus"></i>
+                Add stop
               </button>
-            }
-          </div>
-        }
-      </p-card>
+            </div>
+            <p-accordion
+              class="left-accordion"
+              [multiple]="false"
+              [value]="activeLeftPanel()"
+              (valueChange)="onLeftPanelChange($event)"
+            >
+              <p-accordion-panel value="add-stop">
+                <p-accordion-header>
+                  <div class="checkpoint-header">
+                    <div class="panel-heading">
+                      <span class="panel-icon-wrap">
+                        <i class="pi pi-plus-circle panel-heading-icon"></i>
+                      </span>
+                      <h3>Add Stop</h3>
+                    </div>
+                  </div>
+                </p-accordion-header>
+                <p-accordion-content>
+                  <form
+                    [formGroup]="stopForm"
+                    class="stop-form add-stop-form"
+                    (ngSubmit)="addStop()"
+                  >
+                    <label for="stopLabel">Stop label</label>
+                    <input id="stopLabel" pInputText formControlName="label" />
 
-      <section class="content-grid">
-        <p-card class="add-stop-card">
-          <h3>Add stop</h3>
-          <form [formGroup]="stopForm" class="stop-form" (ngSubmit)="addStop()">
-            <label for="stopLabel">Stop label</label>
-            <input id="stopLabel" pInputText formControlName="label" />
+                    <label for="stopAddress">Address</label>
+                    <p-autocomplete
+                      inputId="stopAddress"
+                      formControlName="address"
+                      [suggestions]="addressSuggestions()"
+                      optionLabel="displayName"
+                      [forceSelection]="false"
+                      appendTo="body"
+                      [dropdown]="true"
+                      [emptyMessage]="
+                        isSearchingAddress()
+                          ? 'Searching addresses...'
+                          : 'No results. Try suburb/city in query.'
+                      "
+                      (completeMethod)="searchAddress($event)"
+                      (onSelect)="selectAddress($event.value)"
+                    ></p-autocomplete>
+                    @if (isSearchingAddress()) {
+                      <small class="search-hint">Searching...</small>
+                    }
 
-            <label for="stopAddress">Address</label>
-            <p-autocomplete
-              inputId="stopAddress"
-              formControlName="address"
-              [suggestions]="addressSuggestions()"
-              optionLabel="displayName"
-              [forceSelection]="false"
-              [dropdown]="true"
-              [emptyMessage]="
-                isSearchingAddress() ? 'Searching addresses...' : 'No results. Try suburb/city in query.'
-              "
-              (completeMethod)="searchAddress($event)"
-              (onSelect)="selectAddress($event.value)"
-            ></p-autocomplete>
-            @if (isSearchingAddress()) {
-              <small class="search-hint">Searching...</small>
-            }
+                    <label for="stopNotes">Notes</label>
+                    <textarea
+                      id="stopNotes"
+                      pTextarea
+                      rows="2"
+                      formControlName="notes"
+                      placeholder="Optional notes for this stop"
+                    ></textarea>
 
-            <label for="stopNotes">Notes</label>
-            <textarea
-              id="stopNotes"
-              pTextarea
-              rows="2"
-              formControlName="notes"
-              placeholder="Optional notes for this stop"
-            ></textarea>
-
-            <button pButton type="submit">Add stop</button>
-          </form>
-        </p-card>
+                    <div class="add-stop-actions">
+                      <button
+                        pButton
+                        type="button"
+                        class="p-button-sm p-button-text"
+                        (click)="resetStopForm()"
+                      >
+                        Clear
+                      </button>
+                      <button pButton type="submit" class="p-button-sm">Add stop</button>
+                    </div>
+                  </form>
+                </p-accordion-content>
+              </p-accordion-panel>
+              <p-accordion-panel value="stops">
+                <p-accordion-header>
+                  <div class="stops-header">
+                    <div class="panel-heading">
+                      <span class="panel-icon-wrap">
+                        <i class="pi pi-map-marker panel-heading-icon"></i>
+                      </span>
+                      <h3>Stops Order</h3>
+                    </div>
+                    <small class="panel-count">{{ activeStops().length }} total</small>
+                  </div>
+                </p-accordion-header>
+                <p-accordion-content>
+                  @if (activeStops().length === 0) {
+                    <div class="panel-empty">
+                      <i class="pi pi-map-marker"></i>
+                      <p>No stops yet</p>
+                      <small>Add your first stop to start building a route.</small>
+                    </div>
+                  } @else {
+                    <div cdkDropList class="stop-list" (cdkDropListDropped)="reorderStops($event)">
+                      @for (stop of activeStops(); track stop.id; let index = $index) {
+                        <article class="stop-row" cdkDrag>
+                          <div class="stop-main">
+                            <span class="drag-icon pi pi-bars"></span>
+                            <strong>{{ index + 1 }}. {{ stop.label }}</strong>
+                            <small>{{ stop.address }}</small>
+                          </div>
+                          <div class="stop-controls">
+                            <button
+                              pButton
+                              type="button"
+                              class="p-button-sm p-button-text"
+                              (click)="moveStop(index, -1)"
+                            >
+                              <i class="pi pi-arrow-up"></i>
+                            </button>
+                            <button
+                              pButton
+                              type="button"
+                              class="p-button-sm p-button-text"
+                              (click)="moveStop(index, 1)"
+                            >
+                              <i class="pi pi-arrow-down"></i>
+                            </button>
+                            <button
+                              pButton
+                              type="button"
+                              class="p-button-sm p-button-text"
+                              (click)="removeStop(index)"
+                            >
+                              <i class="pi pi-trash"></i>
+                            </button>
+                          </div>
+                        </article>
+                      }
+                    </div>
+                  }
+                </p-accordion-content>
+              </p-accordion-panel>
+              <p-accordion-panel value="checkpoints">
+                <p-accordion-header>
+                  <div class="checkpoint-header">
+                    <div class="panel-heading">
+                      <span class="panel-icon-wrap">
+                        <i class="pi pi-compass panel-heading-icon"></i>
+                      </span>
+                      <h3>Checkpoint Navigator</h3>
+                    </div>
+                    <small class="panel-count">{{ activeStops().length }} checkpoints</small>
+                  </div>
+                </p-accordion-header>
+                <p-accordion-content>
+                  <div class="checkpoint-tools">
+                    <input
+                      pInputText
+                      [ngModel]="checkpointSearch()"
+                      (ngModelChange)="checkpointSearch.set($event)"
+                      placeholder="Search checkpoint label/address"
+                      aria-label="Search checkpoints"
+                    />
+                    <button
+                      pButton
+                      type="button"
+                      class="p-button-sm p-button-text"
+                      (click)="checkpointSearch.set('')"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  @if (filteredCheckpoints().length === 0) {
+                    <div class="panel-empty">
+                      <i class="pi pi-compass"></i>
+                      <p>No checkpoints to show</p>
+                      <small>Checkpoints appear automatically after adding stops.</small>
+                    </div>
+                  } @else {
+                    <div class="checkpoint-list">
+                      @for (item of filteredCheckpoints(); track item.stop.id) {
+                        <button
+                          type="button"
+                          class="checkpoint-item"
+                          (click)="focusCheckpoint(item.index)"
+                          (contextmenu)="openCheckpointContext($event, item.index)"
+                        >
+                          <div>
+                            <strong>{{ item.index + 1 }}. {{ item.stop.label }}</strong>
+                            <small>{{ item.stop.address }}</small>
+                          </div>
+                          <span>{{ item.distanceKm.toFixed(2) }} km</span>
+                        </button>
+                      }
+                    </div>
+                  }
+                </p-accordion-content>
+              </p-accordion-panel>
+            </p-accordion>
+          </p-card>
+        </section>
 
         <p-card class="map-card">
           <div class="map-header">
-            <h3>Live Route Map</h3>
-            @if (isPathEditMode()) {
-              <div class="path-editor">
-                <div class="edit-context">
-                  <span class="context-chip">Mode: Path edit</span>
-                  <span class="context-chip">Leg: {{ selectedLegLabel() }}</span>
-                  <span class="context-chip">Pan: {{ isMapPanMode() ? 'On' : 'Off' }}</span>
-                  <span class="context-chip">
-                    Path: {{ activeRoute()?.manualRouteLocked ? 'Locked' : 'Unlocked' }}
-                  </span>
-                </div>
-                <small class="path-helper">Drag or click the route line. The nearest leg is selected automatically.</small>
-                <div class="path-actions">
-                  <button
-                    pButton
-                    type="button"
-                    class="p-button-sm p-button-outlined action-chip"
-                    [class.p-button-secondary]="isMapPanMode()"
-                    (click)="toggleMapPanMode()"
-                  >
-                    {{ isMapPanMode() ? 'Pan on (hold line to edit)' : 'Pan off' }}
-                  </button>
-                  <button pButton type="button" class="p-button-sm p-button-outlined action-chip" (click)="startViaPointPlacement()">
-                    Add via point
-                  </button>
-                  <button pButton type="button" class="p-button-sm p-button-outlined action-chip" (click)="focusSelectedLeg()">
-                    Focus leg
-                  </button>
-                  <button pButton type="button" class="p-button-sm p-button-outlined action-chip" (click)="toggleManualRouteLock()">
-                    {{ activeRoute()?.manualRouteLocked ? 'Unlock path' : 'Lock path' }}
-                  </button>
-                  <button
-                    pButton
-                    type="button"
-                    class="p-button-sm p-button-outlined action-chip"
-                    [disabled]="!selectedLegKey()"
-                    (click)="resetSelectedLeg()"
-                  >
-                    Reset leg
-                  </button>
-                  <button pButton type="button" class="p-button-sm p-button-outlined action-chip" (click)="resetAllLegs()">
-                    Reset all
-                  </button>
-                </div>
+            <div class="map-title-row">
+              <h3>Live Route Map</h3>
+              <div class="map-route-actions">
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-text p-button-rounded"
+                  title="Save route"
+                  (click)="saveRoute()"
+                >
+                  <i class="pi pi-save"></i>
+                </button>
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-text p-button-rounded"
+                  title="Export CSV"
+                  (click)="exportCsv()"
+                >
+                  <i class="pi pi-download"></i>
+                </button>
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-text p-button-rounded"
+                  title="Create intake link"
+                  (click)="createPublicLink()"
+                >
+                  <i class="pi pi-share-alt"></i>
+                </button>
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-text p-button-rounded"
+                  title="Auto optimize"
+                  (click)="optimizeRoute()"
+                >
+                  <i class="pi pi-bolt"></i>
+                </button>
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-text p-button-rounded"
+                  [title]="isEditLocked() ? 'Unlock edits' : 'Lock edits'"
+                  (click)="toggleEditLock()"
+                >
+                  <i [class]="isEditLocked() ? 'pi pi-lock' : 'pi pi-lock-open'"></i>
+                </button>
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-text p-button-rounded"
+                  [disabled]="!canUndo()"
+                  aria-label="Undo last edit"
+                  title="Undo"
+                  (click)="undoEdit()"
+                >
+                  <i class="pi pi-undo"></i>
+                </button>
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-text p-button-rounded"
+                  [disabled]="!canRedo()"
+                  aria-label="Redo last edit"
+                  title="Redo"
+                  (click)="redoEdit()"
+                >
+                  <i class="pi pi-replay"></i>
+                </button>
               </div>
-            }
+            </div>
+            <div class="map-route-meta">
+              <form [formGroup]="routeForm" class="route-name-form route-name-inline">
+                <label class="compact-label" for="routeName">Route</label>
+                <input id="routeName" pInputText formControlName="name" placeholder="Route name" />
+              </form>
+              <p class="summary">
+                {{ activeStops().length }} stop(s) |
+                {{ activeRoute()?.metrics?.totalDistanceKm ?? 0 }} km |
+                {{ activeRoute()?.metrics?.estimatedMinutes ?? 0 }} min
+              </p>
+            </div>
+
+            <div class="path-editor">
+              <div class="path-actions">
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-text action-chip"
+                  (click)="fitEntireRoute()"
+                >
+                  Fit all
+                </button>
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-text action-chip"
+                  [disabled]="activeStops().length === 0"
+                  (click)="centerOnFirstStop()"
+                >
+                  Center route
+                </button>
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-outlined action-chip"
+                  [class.p-button-secondary]="isMapPanMode()"
+                  [disabled]="isEditLocked()"
+                  [title]="isEditLocked() ? 'Unlock edits to change pan mode.' : ''"
+                  (click)="toggleMapPanMode()"
+                >
+                  {{ isMapPanMode() ? 'Pan on (hold line to edit)' : 'Pan off' }}
+                </button>
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-outlined action-chip"
+                  [disabled]="isEditLocked()"
+                  [title]="isEditLocked() ? 'Unlock edits to add via points.' : ''"
+                  (click)="startViaPointPlacement()"
+                >
+                  Add via point
+                </button>
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-outlined action-chip"
+                  [disabled]="!selectedLegKey() || isEditLocked()"
+                  [title]="isEditLocked() ? 'Unlock edits to reset active leg.' : ''"
+                  (click)="resetSelectedLeg()"
+                >
+                  Reset leg
+                </button>
+                <button
+                  pButton
+                  type="button"
+                  class="p-button-sm p-button-outlined action-chip"
+                  [disabled]="isEditLocked()"
+                  [title]="isEditLocked() ? 'Unlock edits to reset all legs.' : ''"
+                  (click)="resetAllLegs()"
+                >
+                  Reset all
+                </button>
+              </div>
+            </div>
+
             @if (activeWarnings().length) {
               <div class="warning-strip">
                 @for (warning of activeWarnings(); track $index) {
@@ -251,7 +434,11 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
                 >
                   Primary
                 </button>
-                @for (alt of activeRoute()?.routeAlternatives ?? []; track $index; let idx = $index) {
+                @for (
+                  alt of activeRoute()?.routeAlternatives ?? [];
+                  track $index;
+                  let idx = $index
+                ) {
                   <button
                     pButton
                     type="button"
@@ -266,13 +453,12 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
               </div>
             }
           </div>
-          @if (activeStops().length === 0) {
-            <p class="map-empty">Add a stop to see your route on the map.</p>
-          }
           <div
             leaflet
             class="map-host"
-            [class.path-edit-select-lock]="isPathEditMode() && (!isMapPanMode() || isLongPressDragActive())"
+            [class.path-edit-select-lock]="
+              isPathEditMode() && (!isMapPanMode() || isLongPressDragActive())
+            "
             [leafletOptions]="mapOptions"
             [leafletLayers]="mapLayers()"
             (leafletMapReady)="onMapReady($event)"
@@ -280,43 +466,18 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
         </p-card>
       </section>
 
-      <p-card class="stops-card">
-        <div class="stops-header">
-          <h3>Stops Order</h3>
-          <small>Drag to reorder or use arrows</small>
-        </div>
-        <div cdkDropList class="stop-list" (cdkDropListDropped)="reorderStops($event)">
-          @for (stop of activeStops(); track stop.id; let index = $index) {
-            <article class="stop-row" cdkDrag>
-              <div class="stop-main">
-                <span class="drag-icon pi pi-bars"></span>
-                <strong>{{ index + 1 }}. {{ stop.label }}</strong>
-                <small>{{ stop.address }}</small>
-              </div>
-              <div class="stop-controls">
-                <button pButton type="button" class="p-button-text" (click)="moveStop(index, -1)">
-                  <i class="pi pi-arrow-up"></i>
-                </button>
-                <button pButton type="button" class="p-button-text" (click)="moveStop(index, 1)">
-                  <i class="pi pi-arrow-down"></i>
-                </button>
-                <button pButton type="button" class="p-button-text" (click)="removeStop(index)">
-                  <i class="pi pi-trash"></i>
-                </button>
-              </div>
-            </article>
-          }
-        </div>
-      </p-card>
-
       @if (checkpointContextMenu()) {
         <div
           class="checkpoint-context"
           [style.left.px]="checkpointContextMenu()!.x"
           [style.top.px]="checkpointContextMenu()!.y"
         >
-          <button type="button" (click)="duplicateCheckpoint(checkpointContextMenu()!.index)">Duplicate</button>
-          <button type="button" (click)="toggleCheckpointLock(checkpointContextMenu()!.index)">Lock/Unlock</button>
+          <button type="button" (click)="duplicateCheckpoint(checkpointContextMenu()!.index)">
+            Duplicate
+          </button>
+          <button type="button" (click)="toggleCheckpointLock(checkpointContextMenu()!.index)">
+            Lock/Unlock
+          </button>
           <button type="button" (click)="removeStop(checkpointContextMenu()!.index)">Delete</button>
           <button type="button" (click)="closeCheckpointContext()">Close</button>
         </div>
@@ -327,229 +488,445 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
     `
       .route-builder-layout {
         display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-      .toolbar-card {
-        position: sticky;
-        top: 0.5rem;
-        z-index: 3;
-      }
-      .toolbar-grid {
-        display: grid;
-        grid-template-columns: minmax(220px, 320px) minmax(220px, 1fr) auto;
-        gap: 0.75rem;
-        align-items: end;
+        height: calc(100dvh - 2.5rem);
+        overflow: hidden;
+        min-height: 0;
+        padding: 0.35rem;
       }
       .route-name-form {
         display: grid;
-        gap: 0.4rem;
-      }
-      .toolbar-status {
-        display: grid;
-        gap: 0.4rem;
-      }
-      .toolbar-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.45rem;
-        justify-content: flex-end;
+        gap: 0.3rem;
       }
       .summary {
         margin: 0;
         color: var(--text-muted);
-        font-size: 0.9rem;
+        font-size: 0.76rem;
       }
       .search-hint {
         color: var(--text-muted);
       }
-      .content-grid {
+      .builder-grid {
         display: grid;
-        grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-        gap: 1rem;
+        grid-template-columns: minmax(18rem, 23rem) minmax(0, 1fr);
+        gap: 0.9rem;
+        height: 100%;
+        width: 100%;
+        min-height: 0;
+        overflow: hidden;
       }
-      .checkpoint-card {
-        border: 1px solid var(--border-color);
+      .left-rail {
+        display: flex;
+        flex-direction: column;
+        align-self: stretch;
+        min-height: 0;
+      }
+      .left-data-card,
+      .map-card {
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
+      }
+      .left-data-card {
+        height: 100%;
+        min-height: 0;
+      }
+      :host ::ng-deep .left-data-card .p-card-body,
+      :host ::ng-deep .map-card .p-card-body {
+        padding: 0.95rem;
+      }
+      :host ::ng-deep .left-data-card .p-card {
+        height: 100%;
+      }
+      :host ::ng-deep .left-data-card .p-card-body {
+        height: 100%;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      :host ::ng-deep .left-data-card .p-card-content {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      :host ::ng-deep .left-data-card .p-card-content,
+      :host ::ng-deep .map-card .p-card-content {
+        padding: 0;
+      }
+      .left-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.6rem;
+        margin-bottom: 0.85rem;
+        padding: 0.2rem 0.15rem 0.75rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+      }
+      .left-panel-title-wrap h3 {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .left-panel-title-wrap small {
+        color: var(--text-muted);
+        font-size: 0.84rem;
+      }
+      .add-stop-btn {
+        white-space: nowrap;
+      }
+      :host ::ng-deep .add-stop-btn.p-button {
+        border-radius: 0.65rem;
+        font-weight: 600;
+      }
+      :host ::ng-deep .left-accordion .p-accordionpanel {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 1rem;
+        background: #fff;
+        margin-bottom: 0.72rem;
+        padding: 0.28rem;
+        overflow: hidden;
+      }
+      :host ::ng-deep .left-accordion {
+        display: block;
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 0.05rem 0.12rem 0.1rem 0.05rem;
+      }
+      :host ::ng-deep .left-accordion .p-accordionheader {
+        padding: 0;
+      }
+      :host ::ng-deep .left-accordion .p-accordionheader .p-accordionheaderlink {
+        padding: 0.82rem 0.94rem;
+        min-height: 3.2rem;
+        border: none;
+        border-radius: 0.78rem;
+        box-shadow: none;
+        background: #f1f5f9;
+      }
+      :host ::ng-deep .left-accordion .p-accordioncontent-content {
+        padding: 0.5rem 0.8rem 0.8rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.2);
+        background: #fff;
+      }
+      :host ::ng-deep .left-accordion .p-accordionpanel.p-accordionpanel-active {
+        border-color: rgba(59, 130, 246, 0.55);
+      }
+      :host
+        ::ng-deep
+        .left-accordion
+        .p-accordionpanel.p-accordionpanel-active
+        .p-accordionheaderlink {
+        background: #eff6ff;
       }
       .checkpoint-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 0.75rem;
+        gap: 0.55rem;
       }
-      .checkpoint-header h3 {
+      .panel-heading {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.52rem;
+        min-width: 0;
+      }
+      .panel-icon-wrap {
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: rgba(59, 130, 246, 0.14);
+        flex-shrink: 0;
+      }
+      .panel-heading-icon {
+        color: #1d4ed8;
+        font-size: 0.8rem;
+      }
+      .panel-heading h3 {
         margin: 0;
+        font-size: 0.98rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
       }
-      .checkpoint-header small {
-        color: var(--text-muted);
+      .panel-count {
+        color: #0f172a;
+        background: rgba(226, 232, 240, 0.86);
+        padding: 0.2rem 0.58rem;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 600;
+        line-height: 1;
+        white-space: nowrap;
       }
       .checkpoint-tools {
         display: flex;
-        gap: 0.5rem;
-        margin-top: 0.65rem;
+        gap: 0.45rem;
+        margin-top: 0.35rem;
       }
       .checkpoint-tools input {
         flex: 1;
       }
       .checkpoint-list {
-        margin-top: 0.65rem;
+        margin-top: 0.55rem;
         display: grid;
-        gap: 0.4rem;
-        max-height: 220px;
+        gap: 0.45rem;
+        min-height: 0;
+        max-height: 16rem;
         overflow: auto;
+        padding: 0.2rem;
+        border-radius: 0.75rem;
       }
       .checkpoint-item {
-        border: 1px solid var(--border-color);
-        border-radius: 0.55rem;
-        padding: 0.45rem 0.6rem;
-        background: var(--surface-elevated);
+        padding: 0.46rem 0.54rem;
+        border-radius: 0.7rem;
         color: var(--text-primary);
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 0.65rem;
+        gap: 0.5rem;
         text-align: left;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: #ffffff;
+        transition:
+          border-color 0.16s ease,
+          box-shadow 0.16s ease,
+          transform 0.16s ease;
       }
-      .checkpoint-item strong,
-      .checkpoint-item small {
-        display: block;
+      .checkpoint-item strong {
+        font-size: 0.85rem;
+        line-height: 1.2;
+      }
+      .checkpoint-item:hover {
+        border-color: rgba(37, 99, 235, 0.36);
+        box-shadow: 0 6px 16px rgba(30, 64, 175, 0.12);
+        transform: translateY(-1px);
       }
       .checkpoint-item small {
         color: var(--text-muted);
+        font-size: 0.72rem;
+        line-height: 1.25;
       }
       .stop-form {
         display: grid;
-        gap: 0.45rem;
+        gap: 0.35rem;
       }
-      .add-stop-card h3,
-      .map-header h3,
-      .stops-header h3 {
-        margin: 0 0 0.6rem;
+      .add-stop-form {
+        padding-top: 0.1rem;
+      }
+      .add-stop-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.35rem;
+        margin-top: 0.35rem;
+      }
+      .map-header h3 {
+        margin: 0 0 0.4rem;
       }
       .stop-list {
         display: grid;
-        gap: 0.45rem;
-        max-height: 300px;
+        gap: 0.38rem;
+        min-height: 0;
+        max-height: 19rem;
         overflow: auto;
+        padding: 0.24rem;
+        border-radius: 0.8rem;
       }
       .stop-row {
-        border: 1px solid var(--border-color);
-        border-radius: 0.6rem;
-        padding: 0.45rem 0.6rem;
+        border-radius: 0.75rem;
+        padding: 0.42rem 0.5rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 0.6rem;
-        background: var(--surface-elevated);
+        gap: 0.38rem;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: #ffffff;
+        transition:
+          border-color 0.16s ease,
+          box-shadow 0.16s ease;
+      }
+      .stop-row:hover {
+        border-color: rgba(37, 99, 235, 0.32);
+        box-shadow: 0 6px 16px rgba(30, 64, 175, 0.1);
       }
       .stop-main {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
-        gap: 0.5rem;
+        gap: 0.14rem;
         min-width: 0;
+        flex: 1;
+      }
+      .stop-main strong {
+        font-size: 0.88rem;
+        font-weight: 700;
+        line-height: 1.15;
+        color: #0f172a;
       }
       .stop-main small {
         color: var(--text-muted);
+        font-size: 0.72rem;
+        line-height: 1.28;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
         overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        max-width: 100%;
       }
       .drag-icon {
         cursor: grab;
+        color: #64748b;
+        font-size: 0.82rem;
       }
       .stop-controls {
         display: flex;
         align-items: center;
-        gap: 0.2rem;
+        gap: 0.08rem;
+        flex-shrink: 0;
       }
-      .map-empty {
+      :host ::ng-deep .stop-controls .p-button.p-button-sm {
+        width: 1.85rem;
+        height: 1.85rem;
+        border-radius: 0.55rem;
+      }
+      :host ::ng-deep .stop-controls .p-button .p-button-icon {
+        font-size: 0.82rem;
+      }
+      :host ::ng-deep .stop-controls .p-button:not(.p-button-danger) {
+        color: #334155;
+      }
+      .map-card {
+        min-height: 0;
+        height: 100%;
+        overflow: hidden;
+      }
+      :host ::ng-deep .map-card .p-card {
+        height: 100%;
+      }
+      :host ::ng-deep .map-card .p-card-body {
+        height: 100%;
+        min-height: 0;
+        display: grid;
+      }
+      :host ::ng-deep .map-card .p-card-content {
+        height: 100%;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+      .map-header {
+        display: grid;
+        gap: 0.45rem;
+        margin-bottom: 0.45rem;
+        padding-bottom: 0.45rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+      }
+      .map-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.25rem;
+      }
+      .map-route-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.45rem;
+        flex-wrap: wrap;
+      }
+      .map-route-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.15rem;
+      }
+      .route-name-inline {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+      }
+      .route-name-inline input {
+        max-width: 17rem;
+      }
+      .compact-label {
+        margin: 0;
+        font-size: 0.78rem;
         color: var(--text-muted);
-        margin: 0.5rem 0 1rem;
       }
       .route-variants {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.4rem;
+        gap: 0.3rem;
       }
       .warning-strip {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.4rem;
-        margin-bottom: 0.45rem;
+        gap: 0.3rem;
       }
       .warning-strip span {
         font-size: 0.78rem;
-        padding: 0.2rem 0.45rem;
+        padding: 0.15rem 0.4rem;
         border-radius: 999px;
         background: rgba(234, 88, 12, 0.14);
         color: #c2410c;
       }
       .path-editor {
         display: grid;
-        gap: 0.45rem;
-        margin-bottom: 0.25rem;
-        padding: 0.6rem;
-        border: 1px solid var(--border-color);
-        border-radius: 0.75rem;
+        gap: 0.12rem;
+        padding: 0.08rem 0;
       }
-      .leg-selector,
       .path-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.35rem;
-      }
-      .path-helper {
-        color: var(--text-muted);
-      }
-      .edit-context {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.35rem;
+        gap: 0.2rem;
       }
       :host ::ng-deep .map-card .p-button {
         border-radius: 999px;
       }
-      :host ::ng-deep .via-pin {
-        width: 28px !important;
-        height: 28px !important;
-        margin-left: -14px !important;
-        margin-top: -14px !important;
-        border: none !important;
-        background: transparent !important;
-        display: grid;
-        place-items: center;
-        cursor: grab;
-        touch-action: none;
-      }
-      :host ::ng-deep .via-pin .via-pin-dot {
-        width: 14px;
-        height: 14px;
-        border-radius: 999px;
-        border: 2px solid #ffffff;
-        background: #16a34a;
-        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.28);
-      }
       .map-host {
-        height: min(62dvh, 560px);
+        height: 100%;
+        min-height: 30rem;
         border-radius: 0.8rem;
         overflow: hidden;
+        min-width: 0;
+        border: 1px solid rgba(148, 163, 184, 0.3);
       }
       .map-host.path-edit-select-lock,
       .map-host.path-edit-select-lock * {
         user-select: none;
-        -webkit-user-select: none;
-        -ms-user-select: none;
-        -webkit-user-drag: none;
       }
       .stops-header {
         display: flex;
         justify-content: space-between;
-        align-items: baseline;
+        align-items: center;
       }
-      .stops-header small {
+      .stops-header h3,
+      .checkpoint-header h3 {
+        margin: 0;
+      }
+      .panel-empty {
+        display: grid;
+        gap: 0.25rem;
+        justify-items: center;
+        text-align: center;
+        border: 1px dashed rgba(148, 163, 184, 0.55);
+        background: linear-gradient(180deg, rgba(248, 250, 252, 0.72), rgba(255, 255, 255, 0.92));
+        border-radius: 0.8rem;
+        padding: 1.15rem 0.85rem;
         color: var(--text-muted);
+      }
+      .panel-empty i {
+        font-size: 1.1rem;
+        color: #2563eb;
+      }
+      .panel-empty p {
+        margin: 0;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 1.02rem;
+      }
+      .panel-empty small {
+        font-size: 0.84rem;
       }
       .checkpoint-context {
         position: fixed;
@@ -571,28 +948,54 @@ import { haversineDistanceKm } from '../../../shared/utils/geo';
         color: var(--text-primary);
       }
       .checkpoint-context button:hover {
-        background: color-mix(in srgb, var(--brand-500) 12%, transparent);
+        background: rgba(52, 85, 219, 0.12);
       }
       @media (max-width: 960px) {
-        .toolbar-grid,
-        .content-grid {
+        .builder-grid {
           grid-template-columns: 1fr;
         }
-        .toolbar-actions {
-          justify-content: flex-start;
+        .route-builder-layout {
+          height: auto;
+          overflow: visible;
+        }
+        .builder-grid {
+          overflow: visible;
+        }
+        .left-rail {
+          display: grid;
+          gap: 0.5rem;
+          height: auto;
+        }
+        .left-data-card {
+          grid-template-rows: auto auto;
+          height: auto;
+        }
+        .stop-list {
+          max-height: 14rem;
+          min-height: 6rem;
+        }
+        .checkpoint-list {
+          min-height: 6rem;
         }
         .map-host {
-          height: 52dvh;
+          height: 62dvh;
+          min-height: 18rem;
+        }
+        .map-title-row,
+        .map-route-meta {
+          align-items: flex-start;
+          flex-direction: column;
         }
       }
-    `
+    `,
   ],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RouteBuilderPage implements OnInit, OnDestroy {
   private static readonly MIN_ROUTE_DEVIATION_METERS = 20;
   private readonly facade = inject(RoutePlannerFacade);
   private readonly settingsStore = inject(SettingsStore);
+  private readonly csvService = inject(CsvRouteService);
   private readonly formBuilder = inject(FormBuilder);
   private readonly activatedRoute = inject(ActivatedRoute);
   private readonly messageService = inject(MessageService);
@@ -602,13 +1005,11 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
   private mapUpHandler: ((event: unknown) => void) | null = null;
   private readonly keydownHandler = (event: KeyboardEvent) => this.handleKeydown(event);
   private longPressHandle: ReturnType<typeof setTimeout> | null = null;
-  private pendingLongPress:
-    | {
-        legKey: string;
-        lat: number;
-        lng: number;
-      }
-    | null = null;
+  private pendingLongPress: {
+    legKey: string;
+    lat: number;
+    lng: number;
+  } | null = null;
 
   protected readonly activeRoute = this.facade.activeRoute;
   protected readonly canUndo = this.facade.canUndo;
@@ -618,14 +1019,19 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
   protected readonly selectedAddress = signal<AddressSuggestion | null>(null);
   protected readonly isSearchingAddress = signal(false);
   protected readonly selectedRouteVariant = signal(0);
-  protected readonly isPathEditMode = signal(false);
+  protected readonly isPathEditMode = signal(true);
+  protected readonly isEditLocked = signal(false);
   protected readonly isMapPanMode = signal(true);
   protected readonly isLongPressDragActive = signal(false);
   protected readonly selectedLegKey = signal<string | null>(null);
-  protected readonly draftViaPoint = signal<{ legKey: string; lat: number; lng: number } | null>(null);
-  protected readonly checkpointPanelCollapsed = signal(false);
+  protected readonly draftViaPoint = signal<{ legKey: string; lat: number; lng: number } | null>(
+    null,
+  );
   protected readonly checkpointSearch = signal('');
-  protected readonly checkpointContextMenu = signal<{ x: number; y: number; index: number } | null>(null);
+  protected readonly checkpointContextMenu = signal<{ x: number; y: number; index: number } | null>(
+    null,
+  );
+  protected readonly activeLeftPanel = signal<'add-stop' | 'stops' | 'checkpoints'>('add-stop');
   protected readonly activeWarnings = computed(() => {
     const warnings: string[] = [];
     const route = this.activeRoute();
@@ -648,14 +1054,15 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       distanceKm:
         index > 0
           ? haversineDistanceKm(this.activeStops()[index - 1], this.activeStops()[index])
-          : 0
+          : 0,
     }));
     if (!query) {
       return checkpoints;
     }
     return checkpoints.filter(
       (item) =>
-        item.stop.label.toLowerCase().includes(query) || item.stop.address.toLowerCase().includes(query)
+        item.stop.label.toLowerCase().includes(query) ||
+        item.stop.address.toLowerCase().includes(query),
     );
   });
   protected readonly legOptions = computed(() => {
@@ -666,7 +1073,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       const toStop = stops[index + 1];
       options.push({
         key: this.buildLegKey(fromStop.id, toStop.id),
-        label: `${index + 1}->${index + 2}`
+        label: `${index + 1}->${index + 2}`,
       });
     }
     return options;
@@ -680,23 +1087,23 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
   });
 
   protected readonly routeForm = this.formBuilder.nonNullable.group({
-    name: ['Premium Route Plan', [Validators.required, Validators.minLength(2)]]
+    name: ['Premium Route Plan', [Validators.required, Validators.minLength(2)]],
   });
 
   protected readonly stopForm = this.formBuilder.nonNullable.group({
     label: ['Stop', [Validators.required]],
     address: ['', [Validators.required]],
-    notes: ['']
+    notes: [''],
   });
 
   protected readonly mapOptions = {
     layers: [
       tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      })
+        attribution: '&copy; OpenStreetMap contributors',
+      }),
     ],
     zoom: 5,
-    center: latLng(52.52, 13.405)
+    center: latLng(52.52, 13.405),
   };
 
   private mapInstance: Map | null = null;
@@ -704,13 +1111,13 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
     shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
     iconSize: [25, 41],
-    iconAnchor: [12, 41]
+    iconAnchor: [12, 41],
   });
   private readonly viaPointIcon: DivIcon = divIcon({
     className: 'via-pin',
     html: '<span class="via-pin-dot"></span>',
     iconSize: [28, 28],
-    iconAnchor: [14, 14]
+    iconAnchor: [14, 14],
   });
 
   protected readonly mapLayers = computed(() => {
@@ -722,16 +1129,14 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       ? [
           marker([draftVia.lat, draftVia.lng], {
             icon: this.viaPointIcon,
-            interactive: false
-          })
+            interactive: false,
+          }),
         ]
       : [];
     const route = this.activeRoute();
     const selectedVariant = this.selectedRouteVariant();
     const selectedPath =
-      selectedVariant > 0
-        ? route?.routeAlternatives?.[selectedVariant - 1]
-        : route?.routePath;
+      selectedVariant > 0 ? route?.routeAlternatives?.[selectedVariant - 1] : route?.routePath;
     const coordinates = selectedPath?.coordinates ?? [];
     if (coordinates.length < 2) {
       if (stops.length < 2) {
@@ -739,27 +1144,32 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       }
       const fallbackLine = polyline(
         stops.map((stop) => [stop.lat, stop.lng] as LatLngExpression),
-        { color: '#3455db', weight: 4, dashArray: '8 8' }
+        { color: '#3455db', weight: 4, dashArray: '8 8' },
       );
       return [...stopMarkers, ...viaMarkers, ...draftMarkers, fallbackLine];
     }
 
     const line = polyline(
       coordinates.map((point) => [point.lat, point.lng] as LatLngExpression),
-      { color: '#3455db', weight: 4 }
+      { color: '#3455db', weight: 4 },
     );
     line.on('mousedown', (event) => {
       this.handleLinePointerDown(
-        event as unknown as { latlng: { lat: number; lng: number }; originalEvent?: Event }
+        event as unknown as { latlng: { lat: number; lng: number }; originalEvent?: Event },
       );
     });
     line.on('touchstart', (event) => {
       this.handleLinePointerDown(
-        event as unknown as { latlng: { lat: number; lng: number }; originalEvent?: Event }
+        event as unknown as { latlng: { lat: number; lng: number }; originalEvent?: Event },
       );
     });
     line.on('click', (event) => {
-      if (!this.isPathEditMode() || this.draftViaPoint() || this.pendingLongPress) {
+      if (
+        !this.isPathEditMode() ||
+        this.isEditLocked() ||
+        this.draftViaPoint() ||
+        this.pendingLongPress
+      ) {
         return;
       }
       void this.addViaPointAtLocation(event.latlng.lat, event.latlng.lng);
@@ -850,7 +1260,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       this.messageService.add({
         severity: 'warn',
         summary: 'Address needed',
-        detail: 'Type a fuller address or select one from suggestions.'
+        detail: 'Type a fuller address or select one from suggestions.',
       });
       return;
     }
@@ -863,7 +1273,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       address: selected.displayName,
       lat: selected.lat,
       lng: selected.lng,
-      notes: this.stopForm.controls.notes.value
+      notes: this.stopForm.controls.notes.value,
     });
 
     this.selectedRouteVariant.set(0);
@@ -871,8 +1281,9 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     this.stopForm.reset({
       label: `Stop ${existingStopCount + 2}`,
       address: '',
-      notes: ''
+      notes: '',
     });
+    this.activeLeftPanel.set('add-stop');
     this.fitMapBounds();
   }
 
@@ -891,7 +1302,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     this.selectedRouteVariant.set(0);
     this.facade.activeRoute.set({
       ...route,
-      manualOverride: !route.manualOverride
+      manualOverride: !route.manualOverride,
     });
   }
 
@@ -930,9 +1341,56 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     }
     this.facade.activeRoute.set({
       ...route,
-      name: this.routeForm.controls.name.value
+      name: this.routeForm.controls.name.value,
     });
     await this.facade.saveActiveRoute();
+  }
+
+  protected exportCsv(): void {
+    const route = this.activeRoute();
+    if (!route || route.stops.length === 0) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'No stops to export',
+        detail: 'Add at least one stop before exporting CSV.',
+      });
+      return;
+    }
+    const csvContent = this.csvService.exportStops(route.stops);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const anchor = document.createElement('a');
+    const fileNameBase = (route.name || this.routeForm.controls.name.value || 'route')
+      .trim()
+      .replace(/\s+/g, '-')
+      .toLowerCase();
+    anchor.href = URL.createObjectURL(blob);
+    anchor.download = `${fileNameBase}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
+  }
+
+  protected async createPublicLink(): Promise<void> {
+    const route = this.activeRoute();
+    if (!route) {
+      return;
+    }
+    await this.saveRoute();
+    const createdLink = await this.facade.createPublicLink(route.id);
+    const publicUrl = `${location.origin}/intake/${createdLink.id}`;
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Public link created',
+        detail: `Copied to clipboard: ${publicUrl}`,
+      });
+    } catch {
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Public link created',
+        detail: publicUrl,
+      });
+    }
   }
 
   protected undoEdit(): void {
@@ -951,7 +1409,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       return;
     }
     this.mapInstance.setView([stop.lat, stop.lng], Math.max(this.mapInstance.getZoom(), 14), {
-      animate: true
+      animate: true,
     });
     this.closeCheckpointContext();
   }
@@ -961,7 +1419,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     this.checkpointContextMenu.set({
       x: event.clientX,
       y: event.clientY,
-      index
+      index,
     });
   }
 
@@ -978,7 +1436,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     stops.splice(index + 1, 0, {
       ...source,
       id: crypto.randomUUID(),
-      label: `${source.label} Copy`
+      label: `${source.label} Copy`,
     });
     await this.facade.updateStops(stops);
     this.closeCheckpointContext();
@@ -992,10 +1450,34 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     }
     stops[index] = {
       ...target,
-      locked: !target.locked
+      locked: !target.locked,
     };
     await this.facade.updateStops(stops);
     this.closeCheckpointContext();
+  }
+
+  protected openAddStopPanel(): void {
+    this.activeLeftPanel.set('add-stop');
+  }
+
+  protected resetStopForm(): void {
+    const nextStopNumber = this.activeStops().length + 1;
+    this.selectedAddress.set(null);
+    this.addressSuggestions.set([]);
+    this.stopForm.reset({
+      label: `Stop ${nextStopNumber}`,
+      address: '',
+      notes: '',
+    });
+  }
+
+  protected onLeftPanelChange(
+    value: string | number | Array<string | number> | null | undefined,
+  ): void {
+    const normalized = Array.isArray(value) ? value[0] : value;
+    if (normalized === 'add-stop' || normalized === 'stops' || normalized === 'checkpoints') {
+      this.activeLeftPanel.set(normalized);
+    }
   }
 
   protected onMapReady(map: Map): void {
@@ -1011,28 +1493,46 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     this.fitMapBounds();
   }
 
-  protected togglePathEditMode(): void {
-    const nextMode = !this.isPathEditMode();
-    this.isPathEditMode.set(nextMode);
-    if (!nextMode) {
-      this.isMapPanMode.set(true);
-      this.isLongPressDragActive.set(false);
-      this.clearLongPress();
-      this.pendingLongPress = null;
-      this.draftViaPoint.set(null);
-    } else {
-      this.isMapPanMode.set(true);
-    }
-    if (nextMode && !this.selectedLegKey()) {
-      const firstLeg = this.legOptions()[0];
-      if (firstLeg) {
-        this.selectedLegKey.set(firstLeg.key);
-      }
-    }
+  protected toggleEditLock(): void {
+    const nextLockedState = !this.isEditLocked();
+    this.isEditLocked.set(nextLockedState);
+    this.isLongPressDragActive.set(false);
+    this.clearLongPress();
+    this.pendingLongPress = null;
+    this.draftViaPoint.set(null);
+    this.isMapPanMode.set(true);
     this.applyMapInteractionMode();
+    this.messageService.add({
+      severity: 'info',
+      summary: nextLockedState ? 'Edits locked' : 'Edits unlocked',
+      detail: nextLockedState
+        ? 'Map edits are paused. Unlock edits to modify route geometry.'
+        : 'Map edits are active again.',
+    });
+  }
+
+  protected fitEntireRoute(): void {
+    this.fitMapBounds();
+  }
+
+  protected centerOnFirstStop(): void {
+    const firstStop = this.activeStops()[0];
+    if (!firstStop || !this.mapInstance) {
+      return;
+    }
+    this.mapInstance.setView(
+      [firstStop.lat, firstStop.lng],
+      Math.max(this.mapInstance.getZoom(), 12),
+      {
+        animate: true,
+      },
+    );
   }
 
   protected toggleMapPanMode(): void {
+    if (this.isEditLocked()) {
+      return;
+    }
     this.isMapPanMode.set(!this.isMapPanMode());
     if (!this.isMapPanMode()) {
       this.clearLongPress();
@@ -1045,11 +1545,19 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
 
   protected startViaPointPlacement(): void {
     const map = this.mapInstance;
+    if (this.isEditLocked()) {
+      this.messageService.add({
+        severity: 'info',
+        summary: 'Edits are locked',
+        detail: 'Unlock edits to place via points.',
+      });
+      return;
+    }
     if (!map || this.legOptions().length === 0) {
       this.messageService.add({
         severity: 'warn',
         summary: 'Add more stops',
-        detail: 'At least two stops are required before editing route path.'
+        detail: 'At least two stops are required before editing route path.',
       });
       return;
     }
@@ -1059,7 +1567,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       };
     };
     mapWithGeoman.pm?.enableDraw('Marker', {
-      continueDrawing: false
+      continueDrawing: false,
     });
   }
 
@@ -1067,11 +1575,12 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     latlng: { lat: number; lng: number };
     originalEvent?: Event;
   }): void {
-    if (!this.isPathEditMode()) {
+    if (!this.isPathEditMode() || this.isEditLocked()) {
       return;
     }
     const legKey =
-      this.inferLegKeyFromLocation(event.latlng.lat, event.latlng.lng) ?? this.resolveSelectedLegKey();
+      this.inferLegKeyFromLocation(event.latlng.lat, event.latlng.lng) ??
+      this.resolveSelectedLegKey();
     if (!legKey) {
       return;
     }
@@ -1082,7 +1591,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       this.draftViaPoint.set({
         legKey,
         lat: event.latlng.lat,
-        lng: event.latlng.lng
+        lng: event.latlng.lng,
       });
       originalEvent?.preventDefault();
       return;
@@ -1092,7 +1601,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     this.pendingLongPress = {
       legKey,
       lat: event.latlng.lat,
-      lng: event.latlng.lng
+      lng: event.latlng.lng,
     };
     this.longPressHandle = setTimeout(() => {
       this.longPressHandle = null;
@@ -1102,7 +1611,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       this.draftViaPoint.set({
         legKey: this.pendingLongPress.legKey,
         lat: this.pendingLongPress.lat,
-        lng: this.pendingLongPress.lng
+        lng: this.pendingLongPress.lng,
       });
       this.isLongPressDragActive.set(true);
       this.applyMapInteractionMode();
@@ -1111,13 +1620,16 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
   }
 
   private async addViaPointAtLocation(lat: number, lng: number, legKey?: string): Promise<void> {
+    if (this.isEditLocked()) {
+      return;
+    }
     const selectedLegKey =
       legKey ?? this.inferLegKeyFromLocation(lat, lng) ?? this.resolveSelectedLegKey();
     if (!selectedLegKey) {
       this.messageService.add({
         severity: 'warn',
         summary: 'Add more stops',
-        detail: 'At least two stops are required before editing route path.'
+        detail: 'At least two stops are required before editing route path.',
       });
       return;
     }
@@ -1130,7 +1642,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       this.messageService.add({
         severity: 'info',
         summary: 'No route change',
-        detail: 'Move farther away from the existing line to create a meaningful via point.'
+        detail: 'Move farther away from the existing line to create a meaningful via point.',
       });
       return;
     }
@@ -1140,8 +1652,8 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       {
         id: crypto.randomUUID(),
         lat,
-        lng
-      }
+        lng,
+      },
     ];
     await this.facade.setLegViaPoints(selectedLegKey, nextViaPoints);
     this.selectedRouteVariant.set(0);
@@ -1152,6 +1664,9 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
   }
 
   protected async resetSelectedLeg(): Promise<void> {
+    if (this.isEditLocked()) {
+      return;
+    }
     const selectedLegKey = this.resolveSelectedLegKey();
     if (!selectedLegKey) {
       return;
@@ -1161,30 +1676,11 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
   }
 
   protected async resetAllLegs(): Promise<void> {
+    if (this.isEditLocked()) {
+      return;
+    }
     await this.facade.clearAllLegOverrides();
     this.selectedRouteVariant.set(0);
-  }
-
-  protected focusSelectedLeg(): void {
-    const selectedLeg = this.resolveSelectedLegKey();
-    const map = this.mapInstance;
-    if (!selectedLeg || !map) {
-      return;
-    }
-    const [fromStopId, toStopId] = selectedLeg.split('->');
-    const stops = this.activeStops();
-    const fromStop = stops.find((item) => item.id === fromStopId);
-    const toStop = stops.find((item) => item.id === toStopId);
-    if (!fromStop || !toStop) {
-      return;
-    }
-    const points: Array<[number, number]> = [
-      [fromStop.lat, fromStop.lng],
-      [toStop.lat, toStop.lng]
-    ];
-    const override = (this.activeRoute()?.legOverrides ?? []).find((item) => item.legKey === selectedLeg);
-    (override?.viaPoints ?? []).forEach((point) => points.push([point.lat, point.lng]));
-    map.fitBounds(points, { padding: [40, 40] });
   }
 
   private initializeGeoman(map: Map): void {
@@ -1208,7 +1704,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       editMode: false,
       dragMode: false,
       cutPolygon: false,
-      removalMode: false
+      removalMode: false,
     });
 
     this.geomanCreateHandler = (rawEvent: unknown) => {
@@ -1216,7 +1712,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       const event = rawEvent as {
         layer?: Marker;
       };
-      if (!this.isPathEditMode() || !event.layer || !mapRef) {
+      if (!this.isPathEditMode() || this.isEditLocked() || !event.layer || !mapRef) {
         return;
       }
 
@@ -1238,8 +1734,8 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
         {
           id: crypto.randomUUID(),
           lat: location.lat,
-          lng: location.lng
-        }
+          lng: location.lng,
+        },
       ];
       void this.facade.setLegViaPoints(selectedLegKey, nextViaPoints);
       mapRef.removeLayer(event.layer);
@@ -1265,7 +1761,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       this.draftViaPoint.set({
         ...currentDraft,
         lat: event.latlng.lat,
-        lng: event.latlng.lng
+        lng: event.latlng.lng,
       });
     };
 
@@ -1365,7 +1861,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     if (!route?.legOverrides?.length) {
       return [];
     }
-    const canEdit = this.isPathEditMode();
+    const canEdit = this.isPathEditMode() && !this.isEditLocked();
     const markers: Marker[] = [];
 
     route.legOverrides.forEach((override) => {
@@ -1373,11 +1869,11 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
         const markerRef = marker([point.lat, point.lng], {
           draggable: canEdit,
           icon: this.viaPointIcon,
-          title: 'Via point'
+          title: 'Via point',
         });
         markerRef.bindTooltip('Via', {
           direction: 'top',
-          permanent: false
+          permanent: false,
         });
         markerRef.on('dragstart', () => {
           this.selectedLegKey.set(override.legKey);
@@ -1408,7 +1904,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     legKey: string,
     viaPointId: string,
     lat: number,
-    lng: number
+    lng: number,
   ): void {
     const route = this.activeRoute();
     if (!route) {
@@ -1422,9 +1918,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       ? this.snapPointToRoutePath(lat, lng)
       : { lat, lng };
     const nextViaPoints = override.viaPoints.map((point) =>
-      point.id === viaPointId
-        ? { ...point, lat: snappedPoint.lat, lng: snappedPoint.lng }
-        : point
+      point.id === viaPointId ? { ...point, lat: snappedPoint.lat, lng: snappedPoint.lng } : point,
     );
     void this.facade.setLegViaPoints(legKey, nextViaPoints);
     this.selectedRouteVariant.set(0);
@@ -1531,13 +2025,13 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     const markerRef = marker([stop.lat, stop.lng], {
       draggable: route?.manualOverride ?? false,
       icon: this.markerIcon,
-      title: stop.label
+      title: stop.label,
     });
     const tooltipLabel = `${index + 1}. ${stop.label}`;
     markerRef.bindTooltip(tooltipLabel, {
       direction: 'top',
       permanent: true,
-      offset: [0, -28]
+      offset: [0, -28],
     });
     markerRef.bindPopup(
       `
@@ -1546,7 +2040,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
         <small>${this.escapeHtml(stop.address)}</small>
         ${stop.notes ? `<p style="margin:8px 0 0;">${this.escapeHtml(stop.notes)}</p>` : ''}
       </div>
-      `
+      `,
     );
     markerRef.on('dragend', (event) => {
       const currentStops = [...this.activeStops()];
@@ -1559,7 +2053,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
       currentStops[index] = {
         ...target,
         lat: point.lat,
-        lng: point.lng
+        lng: point.lng,
       };
       void this.facade.updateStops(currentStops);
       this.selectedRouteVariant.set(0);
@@ -1572,13 +2066,10 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     const route = this.activeRoute();
     const selectedVariant = this.selectedRouteVariant();
     const selectedPath =
-      selectedVariant > 0
-        ? route?.routeAlternatives?.[selectedVariant - 1]
-        : route?.routePath;
-    const points =
-      selectedPath?.coordinates?.length
-        ? selectedPath.coordinates.map((point) => [point.lat, point.lng] as [number, number])
-        : this.activeStops().map((stop) => [stop.lat, stop.lng] as [number, number]);
+      selectedVariant > 0 ? route?.routeAlternatives?.[selectedVariant - 1] : route?.routePath;
+    const points = selectedPath?.coordinates?.length
+      ? selectedPath.coordinates.map((point) => [point.lat, point.lng] as [number, number])
+      : this.activeStops().map((stop) => [stop.lat, stop.lng] as [number, number]);
     if (!map || points.length === 0) {
       return;
     }
@@ -1613,7 +2104,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
     const bestMatch = suggestions[0];
     const resolvedBestMatch = await this.facade.resolveAddress(
       bestMatch.displayName,
-      bestMatch.magicKey
+      bestMatch.magicKey,
     );
     if (!resolvedBestMatch) {
       return null;
@@ -1636,7 +2127,7 @@ export class RouteBuilderPage implements OnInit, OnDestroy {
 function pointToSegmentDistanceMeters(
   point: { lat: number; lng: number },
   start: { lat: number; lng: number },
-  end: { lat: number; lng: number }
+  end: { lat: number; lng: number },
 ): number {
   const anchorLatRad = ((start.lat + end.lat) / 2) * (Math.PI / 180);
   const metersPerDegLat = 111_132;
@@ -1671,7 +2162,7 @@ function pointToSegmentDistanceMeters(
 function projectPointToSegment(
   point: { lat: number; lng: number },
   start: { lat: number; lng: number },
-  end: { lat: number; lng: number }
+  end: { lat: number; lng: number },
 ): { lat: number; lng: number } {
   const anchorLatRad = ((start.lat + end.lat) / 2) * (Math.PI / 180);
   const metersPerDegLat = 111_132;
@@ -1699,6 +2190,6 @@ function projectPointToSegment(
 
   return {
     lat: projectedY / metersPerDegLat,
-    lng: projectedX / metersPerDegLng
+    lng: projectedX / metersPerDegLng,
   };
 }

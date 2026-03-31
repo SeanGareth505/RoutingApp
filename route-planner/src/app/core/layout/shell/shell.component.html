@@ -1,11 +1,26 @@
-<div class="app-shell">
-  <aside class="desktop-nav">
+<div class="app-shell" [class.sidebar-collapsed]="sidebarCollapsed()">
+  <aside class="desktop-nav" [class.is-collapsed]="sidebarCollapsed()">
+    <div class="sidebar-top-row">
+      <button
+        pButton
+        type="button"
+        class="p-button-text p-button-rounded collapse-toggle"
+        (click)="toggleSidebar()"
+        [attr.aria-label]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+        [attr.title]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+      >
+        <i [class]="sidebarCollapsed() ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i>
+      </button>
+    </div>
+
     <div class="brand">
       <p-avatar label="RP" shape="circle"></p-avatar>
-      <div>
-        <h1>Route Planner</h1>
-        <p>Premium logistics cockpit</p>
-      </div>
+      @if (!sidebarCollapsed()) {
+        <div>
+          <h1>Route Planner</h1>
+          <p>Premium logistics cockpit</p>
+        </div>
+      }
     </div>
 
     <nav>
@@ -14,39 +29,53 @@
           [routerLink]="item.path"
           routerLinkActive="active"
           class="nav-link"
+          [attr.title]="sidebarCollapsed() ? item.label : null"
         >
           <i [class]="item.icon"></i>
-          {{ item.label }}
+          @if (!sidebarCollapsed()) {
+            {{ item.label }}
+          }
         </a>
       }
     </nav>
-  </aside>
 
-  <section class="content-area">
-    <header class="topbar">
-      <button pButton type="button" class="p-button-text mobile-menu" (click)="mobileMenuVisible.set(true)">
-        <i class="pi pi-bars"></i>
-      </button>
-      <div>
-        <h2 class="page-title">Transport Route Planning</h2>
-        <p>
-          Role: {{ auth.role() }}
-          <span class="connection-badge" [class.connection-direct]="connectionModeLabel() === 'Direct'">
+    <section class="sidebar-profile">
+      @if (!sidebarCollapsed()) {
+        <div class="profile-meta">
+          <strong>{{ auth.role() }}</strong>
+          <span
+            class="connection-badge"
+            [class.connection-direct]="connectionModeLabel() === 'Direct'"
+          >
             {{ connectionModeLabel() }}
           </span>
-        </p>
-      </div>
+        </div>
+      }
       <button
         pButton
         type="button"
-        class="p-button-outlined theme-toggle"
+        class="p-button-sm p-button-outlined profile-theme-toggle"
         (click)="toggleTheme()"
+        [attr.title]="sidebarCollapsed() ? 'Toggle theme' : null"
       >
         <i [class]="themeStore.mode() === 'dark' ? 'pi pi-sun' : 'pi pi-moon'"></i>
-        {{ themeStore.mode() === 'dark' ? 'Light Mode' : 'Dark Mode' }}
+        @if (!sidebarCollapsed()) {
+          {{ themeStore.mode() === 'dark' ? 'Light' : 'Dark' }}
+        }
       </button>
-    </header>
+    </section>
+  </aside>
+
+  <section class="content-area">
     <main class="page-container">
+      <button
+        pButton
+        type="button"
+        class="p-button-text mobile-menu"
+        (click)="mobileMenuVisible.set(true)"
+      >
+        <i class="pi pi-bars"></i>
+      </button>
       <router-outlet></router-outlet>
     </main>
   </section>

@@ -57,6 +57,28 @@ a {
   color: inherit;
 }
 
+.via-pin {
+  width: 28px !important;
+  height: 28px !important;
+  margin-left: -14px !important;
+  margin-top: -14px !important;
+  border: none !important;
+  background: transparent !important;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.via-pin .via-pin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid #ffffff;
+  background: #16a34a;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.28);
+}
+
 .app-dark {
   --text-primary: #f2f4f7;
   --text-muted: #98a2b3;
